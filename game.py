@@ -9,17 +9,22 @@ AMMO_PER_BATTERY = 10
 
 def explosion_color(progress):
     """Return an (r, g, b) colour for an explosion (progress 0..1 of its life), or None for the default."""
-    pass
+    progress = max(0.0, min(1.0, progress))
+    if progress <= 0.5:
+        t = progress / 0.5
+        return (255, 255, int(255 - 195 * t))
+    t = (progress - 0.5) / 0.5
+    return (255, int(255 - 195 * t), 60)
 
 
 def on_city_destroyed(city):
     """Called when a city is hit; add screen shake, sounds, or a game-over warning here."""
-    pass
+    city.warning_until = pygame.time.get_ticks() + 1000
 
 
 def city_repair_threshold():
     """Return a score value at which a destroyed city is rebuilt, or None to disable city repair."""
-    pass
+    return 200
 
 
 class Battery:
@@ -102,16 +107,20 @@ class Game:
             battery.alive, battery.ammo = True, AMMO_PER_BATTERY
 
     def nearest_battery(self, target):
-        return min(self.batteries, key=lambda b: b.pos.distance_squared_to(target))
+        valid_batteries = [b for b in self.batteries if b.alive and b.ammo > 0]
+        if not valid_batteries:
+            return None
+        return min(valid_batteries, key=lambda b: b.pos.distance_squared_to(target))
 
     def launch(self, target):
         target = pygame.Vector2(target)
         if self.state != "play" or target.y > GROUND_Y - 20:
             return
         battery = self.nearest_battery(target)
-        if battery.alive and battery.ammo > 0:
+        if battery is not None:
             battery.ammo -= 1
             self.interceptors.append(Interceptor(battery.pos, target))
+        
 
     def spawn_missile(self):
         targets = [c for c in self.cities if c.alive] + [b for b in self.batteries if b.alive]
@@ -194,6 +203,9 @@ class Game:
         if self.state == "lose":
             label = self.font.render("ALL CITIES LOST - Press R", True, (255, 255, 120))
             screen.blit(label, label.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+        if any(getattr(city, "warning_until", 0) > pygame.time.get_ticks() for city in self.cities):
+            warning = self.font.render("WARNING: CITY DESTROYED!", True, (255, 100, 100))
+            screen.blit(warning, warning.get_rect(center=(WIDTH // 2, 35)))
 
 
 def main():
